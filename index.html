@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, shrink-to-fit=no">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>VR-Emon</title>
+<style>
+body {
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    color: #fff;
+    margin: 0px;
+    padding: 0;
+    overflow: hidden;
+}
+</style>
+</head>
+
+<body>
+
+</body>
+
+<script>
+/*
+ * Debug parameters.
+ */
+WebVRConfig = {
+  /**
+   * webvr-polyfill configuration
+   */
+
+  // Forces availability of VR mode.
+  //FORCE_ENABLE_VR: true, // Default: false.
+  // Complementary filter coefficient. 0 for accelerometer, 1 for gyro.
+  //K_FILTER: 0.98, // Default: 0.98.
+  // How far into the future to predict during fast motion.
+  //PREDICTION_TIME_S: 0.040, // Default: 0.040 (in seconds).
+  // Flag to disable touch panner. In case you have your own touch controls
+  //TOUCH_PANNER_DISABLED: true, // Default: false.
+  // Enable yaw panning only, disabling roll and pitch. This can be useful for
+  // panoramas with nothing interesting above or below.
+  //YAW_ONLY: true, // Default: false.
+  // Enable the deprecated version of the API (navigator.getVRDevices).
+  //ENABLE_DEPRECATED_API: true, // Default: false.
+  // Scales the recommended buffer size reported by WebVR, which can improve
+  // performance. Making this very small can lower the effective resolution of
+  // your scene.
+  BUFFER_SCALE: 0.5, // default: 1.0
+  // Allow VRDisplay.submitFrame to change gl bindings, which is more
+  // efficient if the application code will re-bind it's resources on the
+  // next frame anyway.
+  // Dirty bindings include: gl.FRAMEBUFFER_BINDING, gl.CURRENT_PROGRAM,
+  // gl.ARRAY_BUFFER_BINDING, gl.ELEMENT_ARRAY_BUFFER_BINDING,
+  // and gl.TEXTURE_BINDING_2D for texture unit 0
+  // Warning: enabling this might lead to rendering issues.
+  //DIRTY_SUBMIT_FRAME_BINDINGS: true // default: false
+};
+</script>
+
+<script src="js/es6-promise.js"></script>
+<script src="js/three.min.js"></script>
+
+<script src="js/ColladaLoader.js"></script>
+<script src="js/collada/Animation.js"></script>
+<script src="js/collada/AnimationHandler.js"></script>
+<script src="js/collada/KeyFrameAnimation.js"></script>
+		
+<script src="js/VRControls.js"></script>
+<script src="js/VREffect.js"></script>
+<script src="js/webvr-polyfill.js"></script>
+<script src="js/webvr-manager.js"></script>
+</head>
+
+<body>
+
+<script>
+
+// レンダラを生成
+var renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(window.devicePixelRatio);
+
+document.body.appendChild(renderer.domElement);
+
+// シーンを生成
+var scene = new THREE.Scene();
+
+// フォグ設定
+scene.fog = new THREE.FogExp2( 0x000000, 0.0025 );
+
+// カメラを生成
+var camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+
+// VR用コントローラを生成
+var controls = new THREE.VRControls(camera);
+
+// VR用エフェクトを生成
+var effect = new THREE.VREffect(renderer);
+effect.setSize(window.innerWidth, window.innerHeight);
+
+// VRマネージャの生成
+var manager = new WebVRManager(renderer, effect);
+
+//////////////////////////////////////////////////
+// 各種オブジェクトのセットアップ
+
+// 背景の作成
+var backLoader = new THREE.TextureLoader();
+var back_material;
+var back_material2;
+
+// ベース背景
+backLoader.load('img/back.png', onBackTextureLoaded);
+function onBackTextureLoaded(texture) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 1);
+
+    var back_geometry = new THREE.CylinderGeometry(100, 100, 2000, 16, 5, true);
+   	
+    back_material = new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xffffff,
+        side: THREE.BackSide,
+        //transparent : true,
+        //opacity : 0.5,
+        //blending : THREE.MultiplyBlending,
+        //depthTest : false
+    });
+	
+    var backmesh = new THREE.Mesh(back_geometry, back_material);
+    backmesh.position.z = 0;
+    backmesh.rotation.x = 3.14 / 2;
+    
+    scene.add(backmesh);
+}
+
+// 時計
+backLoader.load('img/back2.png', onBackTextureLoaded2);
+function onBackTextureLoaded2(texture) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 5);
+
+    var back_geometry = new THREE.CylinderGeometry(90, 90, 2000, 16, 5, true);
+    
+    back_material2 = new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xffffff,
+        side: THREE.BackSide,
+        transparent : true,
+        opacity : 1.0,
+        //blending : THREE.AdditiveBlending,
+        blending : THREE.MultiplyBlending,
+        //depthTest : false
+    });
+	
+    var backmesh = new THREE.Mesh(back_geometry, back_material2);
+    backmesh.position.z = 0;
+    backmesh.rotation.x = 3.14 / 2;
+    
+    scene.add(backmesh);
+}
+
+
+// COLLADAファイルの読み込み
+var dae;
+
+var loader = new THREE.ColladaLoader();
+loader.options.convertUpAxis = true;
+loader.load( 'obj/tm.dae', function ( collada ) {
+
+	dae = collada.scene;
+	// 位置調整
+	dae.position.x = 0.0;
+    dae.position.y = -0.7;
+    dae.position.z = -0.4;
+    //dae.position.z = 1.2;
+    dae.rotation.y = 3.14;
+	dae.updateMatrix();
+
+	scene.add( dae );
+} );			
+
+// アンビエントライト
+var ambient = new THREE.AmbientLight( 0x444444 );
+scene.add( ambient );
+
+// ディレクションライト
+var light = new THREE.PointLight(0xffffff);
+light.position.set(1, 1, -10);
+scene.add(light);
+
+// ディレクションライト
+var light2 = new THREE.PointLight(0xffffff);
+light2.position.set(-1, -1, 0);
+scene.add(light2);
+  
+//////////////////////////////////////////////////
+
+// アニメーションループ
+var lastRender = 0;
+var time = 0;
+function animate(timestamp) {
+    var delta = Math.min(timestamp - lastRender, 500);
+    lastRender = timestamp;
+	
+    // VRコントローラのupdate
+    controls.update();
+
+    // VRマネージャを通してシーンをレンダリング
+    manager.render(scene, camera, timestamp);
+
+    // アニメーションループ
+    requestAnimationFrame(animate);
+    
+    // ライトの移動
+    light.position.z += 0.5;
+    if (light.position.z > 10.0) light.position.z = -10.0;
+    
+    light2.position.z += 0.5;
+    if (light2.position.z > 10.0) light2.position.z = -10.0;
+    
+    // テクスチャアニメーション
+    back_material.map.offset.set(time * 0.2, -time);
+    back_material2.map.offset.set(-time * 0.1, -time);
+    time += 0.005;
+}
+
+// アニメーションの開始
+animate(performance ? performance.now() : Date.now());
+
+</script>
+    
+</body>
+</html>
